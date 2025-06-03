@@ -407,6 +407,65 @@ def main():
             if st.button("📝 Edit All JSONs"):
                 st.session_state.current_editing = None
                 st.rerun()
+        
+        # Add separator before the additional generation section
+        st.divider()
+        
+        # Additional JSON Generation Section
+        st.header("➕ Generate More JSONs")
+        st.markdown("Add more JSONs to your current collection without starting over:")
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        
+        with col1:
+            additional_count = st.number_input(
+                "How many more JSONs?",
+                min_value=1,
+                max_value=10,
+                value=1,
+                key="additional_json_count",
+                help="Number of additional JSONs to generate"
+            )
+        
+        with col2:
+            if st.button("🔁 Add Duplicate JSONs", key="add_duplicates"):
+                # Generate additional exact copies of the original JSON
+                new_jsons = [
+                    copy.deepcopy(st.session_state.original_json) 
+                    for _ in range(additional_count)
+                ]
+                st.session_state.generated_jsons.extend(new_jsons)
+                st.success(f"✅ Added {additional_count} duplicate JSON(s)!")
+                st.rerun()
+        
+        with col3:
+            if st.button("🆕 Add Empty JSONs", key="add_empty"):
+                # Generate additional empty versions
+                def make_empty(obj):
+                    if isinstance(obj, dict):
+                        return {k: make_empty(v) for k, v in obj.items()}
+                    elif isinstance(obj, list):
+                        return []
+                    elif isinstance(obj, str):
+                        return ""
+                    elif isinstance(obj, (int, float)):
+                        return 0
+                    elif isinstance(obj, bool):
+                        return False
+                    else:
+                        return None
+                
+                empty_template = make_empty(st.session_state.original_json)
+                new_jsons = [
+                    copy.deepcopy(empty_template) 
+                    for _ in range(additional_count)
+                ]
+                st.session_state.generated_jsons.extend(new_jsons)
+                st.success(f"✅ Added {additional_count} empty JSON(s)!")
+                st.rerun()
+        
+        # Show current total count
+        st.info(f"📊 Total JSONs: {len(st.session_state.generated_jsons)}")
 
 if __name__ == "__main__":
     main()
