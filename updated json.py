@@ -34,16 +34,55 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dic
             items.append((new_key, v))
     return dict(items)
 
+def parse_numeric_value(value: str) -> Union[int, float, str]:
+    """
+    Parse a string value to appropriate numeric type, preserving integers vs floats.
+    
+    Args:
+        value: String value to parse
+    
+    Returns:
+        Parsed value as int, float, or original string
+    """
+    if not isinstance(value, str):
+        return value
+    
+    value = value.strip()
+    if not value:
+        return value
+    
+    # Try to parse as integer first (no decimal point)
+    if value.lstrip('-').isdigit():
+        return int(value)
+    
+    # Try to parse as float (has decimal point)
+    try:
+        if '.' in value:
+            parsed_float = float(value)
+            # Only return as float if it actually has decimal places
+            if parsed_float == int(parsed_float) and '.' in value:
+                # Check if the original string has meaningful decimal places
+                decimal_part = value.split('.')[1]
+                if decimal_part and not all(c == '0' for c in decimal_part):
+                    return parsed_float
+                else:
+                    return int(parsed_float)
+            return parsed_float
+    except ValueError:
+        pass
+    
+    return value
+
 def unflatten_dict(flat_dict: Dict[str, Any], sep: str = '.') -> Dict[str, Any]:
     """
-    Unflatten a dictionary back to nested structure.
+    Unflatten a dictionary back to nested structure with proper type preservation.
     
     Args:
         flat_dict: Flattened dictionary
         sep: Separator used for nested keys
     
     Returns:
-        Nested dictionary
+        Nested dictionary with preserved types
     """
     result = {}
     for key, value in flat_dict.items():
@@ -54,7 +93,7 @@ def unflatten_dict(flat_dict: Dict[str, Any], sep: str = '.') -> Dict[str, Any]:
                 d[k] = {}
             d = d[k]
         
-        # Try to convert string representations back to appropriate types
+        # Handle different value types with proper type preservation
         if isinstance(value, str):
             # Try to parse as JSON for lists/objects
             if value.startswith('[') and value.endswith(']'):
@@ -62,16 +101,12 @@ def unflatten_dict(flat_dict: Dict[str, Any], sep: str = '.') -> Dict[str, Any]:
                     d[keys[-1]] = json.loads(value)
                 except:
                     d[keys[-1]] = value
-            # Try to parse numbers
-            elif value.isdigit():
-                d[keys[-1]] = int(value)
-            elif '.' in value and value.replace('.', '').isdigit():
-                d[keys[-1]] = float(value)
             # Boolean values
             elif value.lower() in ['true', 'false']:
                 d[keys[-1]] = value.lower() == 'true'
+            # Numeric values with type preservation
             else:
-                d[keys[-1]] = value
+                d[keys[-1]] = parse_numeric_value(value)
         else:
             d[keys[-1]] = value
     
@@ -143,7 +178,12 @@ def create_json_form(json_data: Dict[str, Any], form_key: str, json_index: int):
             if isinstance(value, bool):
                 edited_values[key] = st.checkbox(key, value=value)
             elif isinstance(value, (int, float)):
-                edited_values[key] = st.number_input(key, value=float(value))
+                # Use text input for numbers to preserve type distinction
+                edited_values[key] = st.text_input(
+                    key, 
+                    value=str(value) if value is not None else "",
+                    help=f"Enter number (current: {value}, type: {type(value).__name__})"
+                )
             else:
                 # For strings, lists, etc.
                 edited_values[key] = st.text_input(key, value=str(value) if value is not None else "")
