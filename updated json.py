@@ -34,22 +34,24 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dic
             items.append((new_key, v))
     return dict(items)
 
-def parse_numeric_value(value: str) -> Union[int, float, str]:
+def parse_numeric_value(value: str) -> Union[int, float, str, None]:
     """
     Parse a string value to appropriate numeric type, preserving integers vs floats.
+    Returns None for empty strings to maintain truly empty values.
     
     Args:
         value: String value to parse
     
     Returns:
-        Parsed value as int, float, or original string
+        Parsed value as int, float, string, or None
     """
     if not isinstance(value, str):
         return value
     
     value = value.strip()
+    # Return None for empty strings (truly empty values)
     if not value:
-        return value
+        return None
     
     # Try to parse as integer first (no decimal point)
     if value.lstrip('-').isdigit():
@@ -114,13 +116,13 @@ def unflatten_dict(flat_dict: Dict[str, Any], sep: str = '.') -> Dict[str, Any]:
 
 def clean_json(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Remove empty, null, or None values from JSON.
+    Remove empty, null, or None values from JSON recursively.
     
     Args:
         data: Dictionary to clean
     
     Returns:
-        Cleaned dictionary
+        Cleaned dictionary with no empty/null values
     """
     if isinstance(data, dict):
         cleaned = {}
@@ -131,10 +133,10 @@ def clean_json(data: Dict[str, Any]) -> Dict[str, Any]:
                     cleaned[key] = cleaned_nested
             elif isinstance(value, list):
                 cleaned_list = [clean_json(item) if isinstance(item, dict) else item 
-                              for item in value if item not in [None, "", []]]
+                              for item in value if item not in [None, "", [], {}]]
                 if cleaned_list:
                     cleaned[key] = cleaned_list
-            elif value not in [None, "", "null", "None"]:
+            elif value not in [None, "", "null", "None", "undefined"]:
                 cleaned[key] = value
         return cleaned
     return data
@@ -176,17 +178,24 @@ def create_json_form(json_data: Dict[str, Any], form_key: str, json_index: int):
         for key, value in flat_data.items():
             # Determine the appropriate input widget based on value type
             if isinstance(value, bool):
-                edited_values[key] = st.checkbox(key, value=value)
-            elif isinstance(value, (int, float)):
-                # Use text input for numbers to preserve type distinction
+                # For boolean values, use checkbox but handle None case
+                if value is None:
+                    edited_values[key] = st.checkbox(key, value=False, help="Leave unchecked if not applicable")
+                else:
+                    edited_values[key] = st.checkbox(key, value=value)
+            elif isinstance(value, (int, float)) or value is None:
+                # Use text input for numbers and None values to preserve type distinction
+                display_value = str(value) if value is not None else ""
+                type_hint = f"type: {type(value).__name__}" if value is not None else "Leave empty if not applicable"
                 edited_values[key] = st.text_input(
                     key, 
-                    value=str(value) if value is not None else "",
-                    help=f"Enter number (current: {value}, type: {type(value).__name__})"
+                    value=display_value,
+                    help=f"Enter number ({type_hint})"
                 )
             else:
                 # For strings, lists, etc.
-                edited_values[key] = st.text_input(key, value=str(value) if value is not None else "")
+                display_value = str(value) if value is not None else ""
+                edited_values[key] = st.text_input(key, value=display_value)
         
         col1, col2 = st.columns(2)
         with col1:
@@ -350,22 +359,15 @@ def main():
             
             with col_b:
                 if st.button("🆕 Create Empty JSONs"):
-                    # Generate empty versions
-                    def make_empty(obj):
+                    # Generate truly empty versions (all values as None)
+                    def make_empty_structure(obj):
                         if isinstance(obj, dict):
-                            return {k: make_empty(v) for k, v in obj.items()}
-                        elif isinstance(obj, list):
-                            return []
-                        elif isinstance(obj, str):
-                            return ""
-                        elif isinstance(obj, (int, float)):
-                            return 0
-                        elif isinstance(obj, bool):
-                            return False
+                            return {k: make_empty_structure(v) for k, v in obj.items()}
                         else:
+                            # All non-dict values become None (truly empty)
                             return None
                     
-                    empty_template = make_empty(st.session_state.original_json)
+                    empty_template = make_empty_structure(st.session_state.original_json)
                     st.session_state.generated_jsons = [
                         copy.deepcopy(empty_template) 
                         for _ in range(num_jsons)
@@ -440,22 +442,15 @@ def main():
         
         with col3:
             if st.button("🆕 Add Empty JSONs", key="add_empty"):
-                # Generate additional empty versions
-                def make_empty(obj):
+                # Generate truly empty versions (all values as None)
+                def make_empty_structure(obj):
                     if isinstance(obj, dict):
-                        return {k: make_empty(v) for k, v in obj.items()}
-                    elif isinstance(obj, list):
-                        return []
-                    elif isinstance(obj, str):
-                        return ""
-                    elif isinstance(obj, (int, float)):
-                        return 0
-                    elif isinstance(obj, bool):
-                        return False
+                        return {k: make_empty_structure(v) for k, v in obj.items()}
                     else:
+                        # All non-dict values become None (truly empty)
                         return None
                 
-                empty_template = make_empty(st.session_state.original_json)
+                empty_template = make_empty_structure(st.session_state.original_json)
                 new_jsons = [
                     copy.deepcopy(empty_template) 
                     for _ in range(additional_count)
